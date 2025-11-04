@@ -2,4 +2,4 @@
 /lambda/bin
 /lambda/obj
 /lambda/Properties/PublishProfiles
-uploadweathertolambda/vars.h
+/uploadweathertolambda/vars.h
