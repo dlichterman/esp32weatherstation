@@ -99,7 +99,9 @@ public class Function
             {
                 // Placeholder for actual API call to Weather Underground
                 context.Logger.LogInformation("Posting data to Weather Underground...");
-                
+
+                bool doUpload = true;
+
                 string URL = "http://rtupdate.wunderground.com/weatherstation/updateweatherstation.php?";
                 URL += "ID=" + Environment.GetEnvironmentVariable("wuid");
                 URL += "&PASSWORD=" + Environment.GetEnvironmentVariable("wupassword");
@@ -111,25 +113,28 @@ public class Function
                         URL += "&dewptf=" + DewPtF(input.data.TemperatureBME, input.data.Humidity).ToString();
                         break;
                     case "DS":
-                        if (input.data.TemperatureDS != 85) //85 means an error with the DS sensor
+                        if(Math.Abs(input.data.TemperatureDS - input.data.TemperatureBME) < int.Parse(Environment.GetEnvironmentVariable("tempdiff")))
                         {
                             URL += "&tempf=" + CtoF(input.data.TemperatureDS).ToString();
                             URL += "&dewptf=" + DewPtF(input.data.TemperatureDS, input.data.Humidity).ToString();
                         }
                         else
                         {
-                            context.Logger.LogInformation("DS temp sensor showed 85 - ERROR");
-                            URL += "&tempf=" + CtoF(input.data.TemperatureBME).ToString();
-                            URL += "&dewptf=" + DewPtF(input.data.TemperatureBME, input.data.Humidity).ToString();
+                            context.Logger.LogInformation("DS temp sensor drift too high");
+                            doUpload = false;
                         }
+
                         break;
                 }
                 URL += "&humidity=" + input.data.Humidity.ToString();
                 URL += "&baromin=" + input.data.Pressure.ToString();
                 URL += "&softwaretype=DIYESP32&action=updateraw&realtime=1&rtfreq=60";
-                var resp = await _httpClient.GetAsync(URL);
-                string responseContent = await resp.Content.ReadAsStringAsync();
-                context.Logger.LogInformation(resp.StatusCode.ToString() + " " + responseContent);
+                if(doUpload)
+                {
+                    var resp = await _httpClient.GetAsync(URL);
+                    string responseContent = await resp.Content.ReadAsStringAsync();
+                    context.Logger.LogInformation(resp.StatusCode.ToString() + " " + responseContent);
+                }               
 
             }
         }
