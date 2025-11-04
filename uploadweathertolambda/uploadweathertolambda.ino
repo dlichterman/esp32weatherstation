@@ -115,8 +115,9 @@ void doWeather()
       Serial.print(address[i]);
     }
     Serial.print(" ");
-    Serial.print(ds.getTempC());
     tempDS = ds.getTempC();
+    Serial.print(tempDS);
+    
     Serial.println();
   }
 
@@ -162,7 +163,9 @@ void doWeather()
 
 void setup() {
   Serial.begin(115200);
+  
   pinMode(15, INPUT_PULLUP);
+  
   delay(50);  //Take some time to open up the Serial Monitor
     
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH,   ESP_PD_OPTION_OFF);

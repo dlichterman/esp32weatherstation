@@ -111,8 +111,17 @@ public class Function
                         URL += "&dewptf=" + DewPtF(input.data.TemperatureBME, input.data.Humidity).ToString();
                         break;
                     case "DS":
-                        URL += "&tempf=" + CtoF(input.data.TemperatureDS).ToString();
-                        URL += "&dewptf=" + DewPtF(input.data.TemperatureDS, input.data.Humidity).ToString();
+                        if (input.data.TemperatureDS != 85) //85 means an error with the DS sensor
+                        {
+                            URL += "&tempf=" + CtoF(input.data.TemperatureDS).ToString();
+                            URL += "&dewptf=" + DewPtF(input.data.TemperatureDS, input.data.Humidity).ToString();
+                        }
+                        else
+                        {
+                            context.Logger.LogInformation("DS temp sensor showed 85 - ERROR");
+                            URL += "&tempf=" + CtoF(input.data.TemperatureBME).ToString();
+                            URL += "&dewptf=" + DewPtF(input.data.TemperatureBME, input.data.Humidity).ToString();
+                        }
                         break;
                 }
                 URL += "&humidity=" + input.data.Humidity.ToString();
