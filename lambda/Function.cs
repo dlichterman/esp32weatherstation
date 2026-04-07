@@ -16,8 +16,8 @@ public class AuthData
 }
 public class WeatherData
 {
-    public double TemperatureBME { get; set; }
-    public double TemperatureDS { get; set; }
+    public double? TemperatureBME { get; set; }
+    public double? TemperatureDS { get; set; }
     public double Pressure { get; set; }
     public double Humidity { get; set; }
     public int isLive { get; set; }
@@ -46,8 +46,9 @@ public class Function
         {
             input = JsonSerializer.Deserialize<InputObject>(request.Body);
         }
-        catch (JsonException)
+        catch (JsonException jex)
         {
+            context.Logger.LogInformation($"{jex.Message}");
             return new APIGatewayHttpApiV2ProxyResponse
             {
                 StatusCode = 400, // Bad Request
@@ -57,6 +58,7 @@ public class Function
 
         if (input is null)
         {
+            context.Logger.LogInformation("Input null");
             return new APIGatewayHttpApiV2ProxyResponse
             {
                 StatusCode = 400,
@@ -67,6 +69,7 @@ public class Function
         // 3. Implement your business logic
         if(input.auth is null || !validateApiKey(input.auth.ApiKey))
         {
+            context.Logger.LogInformation("401 unauthorized");
             return new APIGatewayHttpApiV2ProxyResponse
             {
                 StatusCode = 401, // Unauthorized
@@ -76,14 +79,16 @@ public class Function
         else
         {
             //insert into DynamoDB
-            context.Logger.LogInformation("Posting data to DDB");
-            AmazonDynamoDBClient client = new AmazonDynamoDBClient();
-            string tableName = Environment.GetEnvironmentVariable("ddbtable"); 
-
-            var request2 = new PutItemRequest
+            try
             {
-                TableName = tableName,
-                Item = new Dictionary<string, AttributeValue>()
+                context.Logger.LogInformation("Posting data to DDB");
+                AmazonDynamoDBClient client = new AmazonDynamoDBClient();
+                string tableName = Environment.GetEnvironmentVariable("ddbtable");
+
+                var request2 = new PutItemRequest
+                {
+                    TableName = tableName,
+                    Item = new Dictionary<string, AttributeValue>()
                       {
                           { "timestamp", new AttributeValue { S = DateTime.UtcNow.ToString() }},
                           {
@@ -92,8 +97,15 @@ public class Function
                             { S = request.Body }
                           }
                       }
-            };
-            await client.PutItemAsync(request2);
+                };
+                await client.PutItemAsync(request2);
+
+            }
+            catch (Exception ex)
+            {
+                context.Logger.LogInformation($"{ex.Message}");
+            }
+
             //call wunderground API to post data
             if (input.data.isLive == 2)
             {
@@ -109,19 +121,27 @@ public class Function
                 switch (Environment.GetEnvironmentVariable("tempSensor"))
                 {
                     case "BME" :
-                        URL += "&tempf=" + CtoF(input.data.TemperatureBME).ToString();
-                        URL += "&dewptf=" + DewPtF(input.data.TemperatureBME, input.data.Humidity).ToString();
+                        URL += "&tempf=" + CtoF(input.data.TemperatureBME.GetValueOrDefault()).ToString();
+                        URL += "&dewptf=" + DewPtF(input.data.TemperatureBME.GetValueOrDefault(), input.data.Humidity).ToString();
                         break;
                     case "DS":
-                        if(Math.Abs(input.data.TemperatureDS - input.data.TemperatureBME) < int.Parse(Environment.GetEnvironmentVariable("tempdiff")))
+                        if (input.data.TemperatureDS.HasValue)
                         {
-                            URL += "&tempf=" + CtoF(input.data.TemperatureDS).ToString();
-                            URL += "&dewptf=" + DewPtF(input.data.TemperatureDS, input.data.Humidity).ToString();
+                            if (Math.Abs(input.data.TemperatureDS.GetValueOrDefault() - input.data.TemperatureBME.GetValueOrDefault()) < int.Parse(Environment.GetEnvironmentVariable("tempdiff")))
+                            {
+                                URL += "&tempf=" + CtoF(input.data.TemperatureDS.GetValueOrDefault()).ToString();
+                                URL += "&dewptf=" + DewPtF(input.data.TemperatureDS.GetValueOrDefault(), input.data.Humidity).ToString();
+                            }
+                            else
+                            {
+                                context.Logger.LogInformation("DS temp sensor drift too high");
+                                doUpload = false;
+                            }
                         }
-                        else
+                        else if (input.data.TemperatureBME.HasValue)
                         {
-                            context.Logger.LogInformation("DS temp sensor drift too high");
-                            doUpload = false;
+                            URL += "&tempf=" + CtoF(input.data.TemperatureBME.GetValueOrDefault()).ToString();
+                            URL += "&dewptf=" + DewPtF(input.data.TemperatureBME.GetValueOrDefault(), input.data.Humidity).ToString();
                         }
 
                         break;
